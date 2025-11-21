@@ -159,11 +159,56 @@ namespace DbMetaTool
         /// </summary>
         public static void UpdateDatabase(string connectionString, string scriptsDirectory)
         {
-            // TODO:
-            // 1) Połącz się z bazą danych przy użyciu connectionString.
-            // 2) Wykonaj skrypty z katalogu scriptsDirectory (tylko obsługiwane elementy).
-            // 3) Zadbaj o poprawną kolejność i bezpieczeństwo zmian.
-            throw new NotImplementedException();
+            if (!Directory.Exists(scriptsDirectory))
+                throw new DirectoryNotFoundException($"Brak katalogu skryptów: {scriptsDirectory}");
+
+            var sqlFiles = Directory.GetFiles(scriptsDirectory, "*.sql");
+            if (sqlFiles.Length == 0)
+                throw new Exception("Brak plików .sql w podanym katalogu.");
+
+            Array.Sort(sqlFiles);
+
+            try
+            {
+                using var connection = new FbConnection(connectionString);
+                connection.Open();
+
+                Console.WriteLine("Połączono z bazą danych. Rozpoczynam aktualizację...");
+
+                foreach (var file in sqlFiles)
+                {
+                    string fileName = Path.GetFileName(file);
+                    string script = File.ReadAllText(file).Trim();
+
+                    if (string.IsNullOrWhiteSpace(script))
+                    {
+                        Console.WriteLine($"(pomijam) pusty plik: {fileName}");
+                        continue;
+                    }
+
+                    Console.WriteLine($"Wykonywanie: {fileName}");
+
+                    using var cmd = new FbCommand(script, connection);
+
+                    try
+                    {
+                        cmd.ExecuteNonQuery();
+                        Console.WriteLine($" Wykonano poprawnie: {fileName}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($" Błąd w pliku {fileName}: {ex.Message}");
+                        throw;
+                    }
+                }
+
+                Console.WriteLine("Aktualizacja bazy danych zakończona.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Błąd podczas aktualizacji bazy: " + ex.Message);
+                throw;
+            }
         }
     }
 }
