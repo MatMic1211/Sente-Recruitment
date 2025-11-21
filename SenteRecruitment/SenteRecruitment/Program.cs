@@ -1,9 +1,29 @@
 ﻿using FirebirdSql.Data.FirebirdClient;
-using System;
-using System.IO;
+using FirebirdSql.Data.Isql;
+using System.Text;
 
 namespace DbMetaTool
 {
+
+    public class DomainInfo
+    {
+        public required string Name { get; set; }
+        public required string DataType { get; set; }
+    }
+
+    public class ColumnInfo
+    {
+        public required string Name { get; set; }
+        public required string DataType { get; set; }
+        public bool IsNullable { get; set; }
+    }
+
+    public class StoradeProcedureInfo
+    {
+        public required string Name { get; set; }
+        public required string Source { get; set; }
+    }
+
     public static class Program
     {
         // Przykładowe wywołania:
@@ -24,7 +44,6 @@ namespace DbMetaTool
             try
             {
                 var command = args[0].ToLowerInvariant();
-
                 switch (command)
                 {
                     case "build-db":
@@ -82,11 +101,6 @@ namespace DbMetaTool
         /// </summary>
         public static void BuildDatabase(string databaseDirectory, string scriptsDirectory)
         {
-            if (!Directory.Exists(databaseDirectory))
-                Directory.CreateDirectory(databaseDirectory);
-
-            string databasePath = Path.Combine(databaseDirectory, "database.fdb");
-
             string server = "localhost";
             string user = "SYSDBA";
             string password = "masterkey";
@@ -94,7 +108,7 @@ namespace DbMetaTool
             var csBuilder = new FbConnectionStringBuilder
             {
                 DataSource = server,
-                Database = databasePath,
+                Database = databaseDirectory,
                 UserID = user,
                 Password = password,
                 Charset = "UTF8",
@@ -102,38 +116,35 @@ namespace DbMetaTool
             };
 
             string connectionString = csBuilder.ToString();
-            if (!File.Exists(databasePath))
-            {
-                Console.WriteLine("Tworzenie bazy danych...");
-                FbConnection.CreateDatabase(connectionString);
-                Console.WriteLine($"Baza danych utworzona: {databasePath}");
-            }
-            else
-            {
-                Console.WriteLine("Baza istnieje. Przechodzę dalej.");
-            }
 
+            Console.WriteLine("Tworzenie bazy danych...");
+            FbConnection.CreateDatabase(connectionString);
+            Console.WriteLine($"Baza danych została utworzona: {databaseDirectory}");
+
+            UpdateDatabase(connectionString, scriptsDirectory);
+        }
+
+
+        /// <summary>
+        /// Generuje skrypty metadanych z istniejącej bazy danych Firebird 5.0.
+        /// </summary>
+        public static async void ExportScripts(string connectionString, string outputDirectory)
+        {
             try
             {
-                using var connection = new FbConnection(connectionString);
-                connection.Open();
-                Console.WriteLine("Połączono z bazą danych.");
+                using var conn = new FbConnection(connectionString);
+                await conn.OpenAsync();
 
-                var sqlFiles = Directory.GetFiles(scriptsDirectory, "*.sql");
-                Array.Sort(sqlFiles);
+                var sb = new StringBuilder();
 
-                foreach (var file in sqlFiles)
-                {
-                    Console.WriteLine($"Wykonuję: {Path.GetFileName(file)}");
+                ExportDomains(conn, sb);
+                ExportTables(conn, sb);
+                ExportStoredProcedures(conn, sb);
 
-                    string script = File.ReadAllText(file);
-                    using var command = new FbCommand(script, connection);
-                    command.ExecuteNonQuery();
+                File.WriteAllText(Path.Combine(outputDirectory, "output.sql"), sb.ToString(), Encoding.UTF8);
 
-                    Console.WriteLine($"✓ Wykonano: {Path.GetFileName(file)}");
-                }
+                Console.WriteLine("Zakończono generowanie pliku output.sql");
 
-                Console.WriteLine("Wszystkie skrypty wykonane.");
             }
             catch (Exception ex)
             {
@@ -141,17 +152,190 @@ namespace DbMetaTool
             }
         }
 
-
-        /// <summary>
-        /// Generuje skrypty metadanych z istniejącej bazy danych Firebird 5.0.
-        /// </summary>
-        public static void ExportScripts(string connectionString, string outputDirectory)
+        private static async void ExportTables(FbConnection conn, StringBuilder sb)
         {
-            // TODO:
-            // 1) Połącz się z bazą danych przy użyciu connectionString.
-            // 2) Pobierz metadane domen, tabel (z kolumnami) i procedur.
-            // 3) Wygeneruj pliki .sql / .json / .txt w outputDirectory.
-            throw new NotImplementedException();
+            var tables = await GetTablesAsync(conn);
+
+            foreach (var table in tables)
+            {
+                var columns = await GetColumnsAsync(conn, table);
+                sb.AppendLine($"-- =======================================");
+                sb.AppendLine($"-- TABLE: {table}");
+                sb.AppendLine($"-- =======================================");
+                sb.AppendLine($"CREATE TABLE {table} (");
+
+                foreach (var col in columns)
+                {
+                    sb.AppendLine($"    {col.Name} {col.DataType}{(col.IsNullable ? "" : " NOT NULL")},");
+                }
+
+                sb.Remove(sb.Length - 3, 1);
+                sb.AppendLine(");");
+                sb.AppendLine();
+            }
+        }
+
+        private static async void ExportDomains(FbConnection conn, StringBuilder sb)
+        {
+            var domains = await GetDomainsAsync(conn);
+
+            foreach (var domain in domains)
+            {
+                sb.AppendLine($"-- =======================================");
+                sb.AppendLine($"-- DOMAIN: {domain.Name}");
+                sb.AppendLine($"-- =======================================");
+                sb.AppendLine($"CREATE DOMAIN {domain.Name} AS \n{domain.DataType};");
+                sb.AppendLine();
+            }
+        }
+
+        private static async void ExportStoredProcedures(FbConnection conn, StringBuilder sb)
+        {
+            var storedProcedures = await GetStoredProdeduresAsync(conn);
+
+            foreach (var sp in storedProcedures)
+            {
+                sb.AppendLine($"-- =======================================");
+                sb.AppendLine($"-- STOREDPROCEDURE: {sp.Name}");
+                sb.AppendLine($"-- =======================================");
+                sb.AppendLine($"CREATE PROCEDURE {sp.Name}\n{sp.Source}");
+                sb.AppendLine();
+            }
+        }
+
+        private static async Task<List<DomainInfo>> GetDomainsAsync(FbConnection conn)
+        {
+            var list = new List<DomainInfo>();
+
+            string sql = @"
+            SELECT 
+            TRIM(RDB$FIELD_NAME) AS NAME,
+            RDB$FIELD_LENGTH AS LENGTH,
+            RDB$FIELD_TYPE AS FIELD_TYPE
+            FROM RDB$FIELDS
+            WHERE RDB$SYSTEM_FLAG = 0
+              AND RDB$FIELD_NAME NOT LIKE 'RDB$%'
+            ORDER BY RDB$FIELD_NAME;
+            ";
+
+            using var cmd = new FbCommand(sql, conn);
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var domain = new DomainInfo
+                {
+                    Name = reader.GetString(0),
+                    DataType = FirebirdTypeToSql(reader.GetInt32(2), reader.GetInt32(1))
+                };
+
+                list.Add(domain);
+            }
+
+            return list;
+        }
+
+        private static async Task<List<string>> GetTablesAsync(FbConnection conn)
+        {
+            var list = new List<string>();
+
+            string sql = @"
+                SELECT TRIM(RDB$RELATION_NAME)
+                FROM RDB$RELATIONS
+                WHERE RDB$SYSTEM_FLAG = 0
+                AND RDB$VIEW_BLR IS NULL
+            ";
+
+            using var cmd = new FbCommand(sql, conn);
+            using var reader = await cmd.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+                list.Add(reader.GetString(0));
+
+            return list;
+        }
+
+        private static async Task<List<ColumnInfo>> GetColumnsAsync(FbConnection conn, string table)
+        {
+            var list = new List<ColumnInfo>();
+
+            string sql = @"
+            SELECT 
+                TRIM(RF.RDB$FIELD_NAME) AS COLUMN_NAME,
+                F.RDB$FIELD_LENGTH AS LENGTH,
+                F.RDB$FIELD_TYPE AS TYPE,
+                RF.RDB$NULL_FLAG AS NULL_FLAG
+                FROM RDB$RELATION_FIELDS RF
+                JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+                WHERE RF.RDB$RELATION_NAME = @TABLE
+                ORDER BY RF.RDB$FIELD_POSITION
+            ";
+
+            using var cmd = new FbCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@TABLE", table);
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var col = new ColumnInfo
+                {
+                    Name = reader.GetString(0),
+                    DataType = FirebirdTypeToSql(reader.GetInt32(2), reader.GetInt32(1)),
+                    IsNullable = reader.IsDBNull(3)
+                };
+
+                list.Add(col);
+            }
+
+            return list;
+        }
+
+        private static async Task<List<StoradeProcedureInfo>> GetStoredProdeduresAsync(FbConnection conn)
+        {
+            var list = new List<StoradeProcedureInfo>();
+            var sql = @"
+            SELECT 
+            TRIM(RDB$PROCEDURE_NAME) AS NAME,
+            TRIM(RDB$PROCEDURE_SOURCE) AS SRC
+            FROM RDB$PROCEDURES
+            ORDER BY RDB$PROCEDURE_NAME;
+            ";
+
+            using var cmd = new FbCommand(sql, conn);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader["NAME"].ToString();
+                var src = reader["SRC"]?.ToString();
+                if (!string.IsNullOrEmpty(name) && !string.IsNullOrWhiteSpace(src))
+                {
+                    var sp = new StoradeProcedureInfo
+                    {
+                        Name = name,
+                        Source = src
+                    };
+                    list.Add(sp);
+                }
+            }
+            return list;
+        }
+
+        static string FirebirdTypeToSql(int type, int length)
+        {
+            return type switch
+            {
+                7 => "SMALLINT",
+                8 => "INTEGER",
+                10 => "FLOAT",
+                12 => "DATE",
+                13 => "TIME",
+                14 => $"CHAR({length})",
+                16 => "BIGINT",
+                27 => "DOUBLE PRECISION",
+                35 => "TIMESTAMP",
+                37 => $"VARCHAR({length})",
+                _ => "UNKNOWN"
+            };
         }
 
         /// <summary>
@@ -162,52 +346,36 @@ namespace DbMetaTool
             if (!Directory.Exists(scriptsDirectory))
                 throw new DirectoryNotFoundException($"Brak katalogu skryptów: {scriptsDirectory}");
 
-            var sqlFiles = Directory.GetFiles(scriptsDirectory, "*.sql");
-            if (sqlFiles.Length == 0)
-                throw new Exception("Brak plików .sql w podanym katalogu.");
-
-            Array.Sort(sqlFiles);
-
             try
             {
                 using var connection = new FbConnection(connectionString);
                 connection.Open();
+                Console.WriteLine("Połączenie z bazą danych zostało otwarte.");
 
-                Console.WriteLine("Połączono z bazą danych. Rozpoczynam aktualizację...");
+                var sqlFiles = Directory.GetFiles(scriptsDirectory, "*.sql");
+                Array.Sort(sqlFiles);
 
                 foreach (var file in sqlFiles)
                 {
-                    string fileName = Path.GetFileName(file);
-                    string script = File.ReadAllText(file).Trim();
+                    Console.WriteLine($"Wykonuję: {Path.GetFileName(file)}");
 
-                    if (string.IsNullOrWhiteSpace(script))
+                    string sqlText = File.ReadAllText(file);
+                    var script = new FbScript(sqlText);
+                    script.Parse();
+                    var batch = new FbBatchExecution(connection);
+                    foreach (var cmd in script.Results)
                     {
-                        Console.WriteLine($"(pomijam) pusty plik: {fileName}");
-                        continue;
+                        batch.Statements.Add(cmd);
                     }
-
-                    Console.WriteLine($"Wykonywanie: {fileName}");
-
-                    using var cmd = new FbCommand(script, connection);
-
-                    try
-                    {
-                        cmd.ExecuteNonQuery();
-                        Console.WriteLine($" Wykonano poprawnie: {fileName}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($" Błąd w pliku {fileName}: {ex.Message}");
-                        throw;
-                    }
+                    batch.Execute();
+                    Console.WriteLine($"Wykonano: {Path.GetFileName(file)}");
                 }
 
-                Console.WriteLine("Aktualizacja bazy danych zakończona.");
+                Console.WriteLine("Wszystkie skrypty zostały wykonane.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Błąd podczas aktualizacji bazy: " + ex.Message);
-                throw;
+                Console.WriteLine("Błąd wykonania skryptów: " + ex.Message);
             }
         }
     }
