@@ -2,7 +2,7 @@
   "profiles": {
     "SenteRecruitment": {
       "commandName": "Project",
-      "commandLineArgs": "update-db --connection-string \"initial catalog=C:\\FirebirdDB\\DB7.FDB;user id=SYSDBA;password=masterkey;server type=Embedded;client library=fbclient.dll\" --scripts-dir \"C:\\FirebirdDB\\Scripts\\DB7\\New\""
+      "commandLineArgs": "export-scripts --connection-string \"initial catalog=C:\\FirebirdDB\\DB7.FDB;user id=SYSDBA;password=masterkey;server type=Embedded;client library=fbclient.dll\" --output-dir \"C:\\FirebirdDB\\Scripts\\DB7\"\r\n"
     }
   }
 }

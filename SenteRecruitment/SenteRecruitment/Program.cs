@@ -1,5 +1,7 @@
 ﻿using FirebirdSql.Data.FirebirdClient;
 using FirebirdSql.Data.Isql;
+using System.ComponentModel;
+using System.Reflection.Metadata;
 using System.Text;
 
 namespace DbMetaTool
@@ -22,6 +24,13 @@ namespace DbMetaTool
     {
         public required string Name { get; set; }
         public required string Source { get; set; }
+    }
+
+    public class StoradeProcedureParameterInfo
+    {
+        public required string Name { get; set; }
+        public required string Direction { get; set; }
+        public required string DataType { get; set; }
     }
 
     public static class Program
@@ -195,10 +204,24 @@ namespace DbMetaTool
 
             foreach (var sp in storedProcedures)
             {
+                var parameters = await GetStoradeProcedureParameterAsync(conn, sp.Name);
                 sb.AppendLine($"-- =======================================");
                 sb.AppendLine($"-- STOREDPROCEDURE: {sp.Name}");
                 sb.AppendLine($"-- =======================================");
-                sb.AppendLine($"CREATE PROCEDURE {sp.Name}\n{sp.Source}");
+                sb.AppendLine($"CREATE PROCEDURE {sp.Name}");
+                if (parameters.Any(p => p.Direction == "1"))
+                {
+                    sb.AppendLine($"RETURNS (");
+                    foreach (var parameter in parameters.Where(p => p.Direction == "1"))
+                    {
+                        sb.AppendLine($"    {parameter.Name} {parameter.DataType},");
+                    }
+                    sb.Remove(sb.Length - 3, 1);
+                    sb.AppendLine(")");
+                    sb.AppendLine("AS");
+                    sb.AppendLine($"{sp.Source};");
+                    sb.AppendLine();
+                }
                 sb.AppendLine();
             }
         }
@@ -320,6 +343,41 @@ namespace DbMetaTool
             return list;
         }
 
+
+        private static async Task<List<StoradeProcedureParameterInfo>> GetStoradeProcedureParameterAsync(FbConnection conn, string storadeProcedure)
+        {
+            var list = new List<StoradeProcedureParameterInfo>();
+
+            string sql = @"
+            SELECT
+            TRIM(P.RDB$PARAMETER_NAME) AS PARAM_NAME,
+            P.RDB$PARAMETER_TYPE AS PARAM_DIRECTION,
+            F.RDB$FIELD_TYPE AS FIELD_TYPE,
+            F.RDB$FIELD_LENGTH AS LENGTH
+            FROM RDB$PROCEDURE_PARAMETERS P
+            JOIN RDB$FIELDS F ON P.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+            WHERE P.RDB$PROCEDURE_NAME = @PROC
+            ORDER BY P.RDB$PARAMETER_TYPE, P.RDB$PARAMETER_NUMBER;
+            ";
+
+            using var cmd = new FbCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@PROC", storadeProcedure);
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var parameter = new StoradeProcedureParameterInfo
+                {
+                    Name = reader.GetString(0),
+                    Direction = reader.GetString(1),
+                    DataType = FirebirdTypeToSql(reader.GetInt32(2), reader.GetInt32(3)),
+                };
+
+                list.Add(parameter);
+            }
+
+            return list;
+        }
         static string FirebirdTypeToSql(int type, int length)
         {
             return type switch

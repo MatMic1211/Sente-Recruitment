@@ -3,12 +3,12 @@
   "WorkspaceRootPath": "C:\\Mateusz\\Projekty\\Sente\\SenteRecruitment\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{9FCF183B-1308-4561-89F2-8AE7DEC2B4A7}|SenteRecruitment\\SenteRecruitment.csproj|c:\\mateusz\\projekty\\sente\\senterecruitment\\senterecruitment\\senterecruitment.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|",
-      "RelativeMoniker": "D:0:0:{9FCF183B-1308-4561-89F2-8AE7DEC2B4A7}|SenteRecruitment\\SenteRecruitment.csproj|solutionrelative:senterecruitment\\senterecruitment.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{9FCF183B-1308-4561-89F2-8AE7DEC2B4A7}|SenteRecruitment\\SenteRecruitment.csproj|c:\\mateusz\\projekty\\sente\\senterecruitment\\senterecruitment\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{9FCF183B-1308-4561-89F2-8AE7DEC2B4A7}|SenteRecruitment\\SenteRecruitment.csproj|solutionrelative:senterecruitment\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9FCF183B-1308-4561-89F2-8AE7DEC2B4A7}|SenteRecruitment\\SenteRecruitment.csproj|c:\\mateusz\\projekty\\sente\\senterecruitment\\senterecruitment\\senterecruitment.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|",
+      "RelativeMoniker": "D:0:0:{9FCF183B-1308-4561-89F2-8AE7DEC2B4A7}|SenteRecruitment\\SenteRecruitment.csproj|solutionrelative:senterecruitment\\senterecruitment.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
     }
   ],
   "DocumentGroupContainers": [
@@ -18,15 +18,19 @@
       "DocumentGroups": [
         {
           "DockedWidth": 275,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 3,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:130:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
             },
             {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
               "Title": "SenteRecruitment",
               "DocumentMoniker": "C:\\Mateusz\\Projekty\\Sente\\SenteRecruitment\\SenteRecruitment\\SenteRecruitment.csproj",
               "RelativeDocumentMoniker": "SenteRecruitment\\SenteRecruitment.csproj",
@@ -38,13 +42,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "Program.cs",
               "DocumentMoniker": "C:\\Mateusz\\Projekty\\Sente\\SenteRecruitment\\SenteRecruitment\\Program.cs",
               "RelativeDocumentMoniker": "SenteRecruitment\\Program.cs",
-              "ToolTip": "C:\\Mateusz\\Projekty\\Sente\\SenteRecruitment\\SenteRecruitment\\Program.cs",
-              "RelativeToolTip": "SenteRecruitment\\Program.cs",
-              "ViewState": "AQIAAE4AAAAAAAAAAAAlwGYAAAAIAAAA",
+              "ToolTip": "C:\\Mateusz\\Projekty\\Sente\\SenteRecruitment\\SenteRecruitment\\Program.cs*",
+              "RelativeToolTip": "SenteRecruitment\\Program.cs*",
+              "ViewState": "AQIAALwAAAAAAAAAAAApwN0AAAAwAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-11-21T08:41:01.608Z",
               "EditorCaption": ""
