@@ -82,69 +82,65 @@ namespace DbMetaTool
         /// </summary>
         public static void BuildDatabase(string databaseDirectory, string scriptsDirectory)
         {
-            Console.WriteLine("=== BuildDatabase: Tworzenie bazy Firebird ===");
-            Directory.CreateDirectory(databaseDirectory);
+            if (!Directory.Exists(databaseDirectory))
+                Directory.CreateDirectory(databaseDirectory);
 
-            string dbPath = Path.Combine(databaseDirectory, "database.fdb");
+            string databasePath = Path.Combine(databaseDirectory, "database.fdb");
 
-            if (File.Exists(dbPath))
+            string server = "localhost";
+            string user = "SYSDBA";
+            string password = "masterkey";
+
+            var csBuilder = new FbConnectionStringBuilder
             {
-                Console.WriteLine("Usuwam istniejący plik bazy...");
-                File.Delete(dbPath);
-            }
-            var csb = new FbConnectionStringBuilder
-            {
-                Database = dbPath,
-                UserID = "SYSDBA",
-                Password = "masterkey",
-                ServerType = FbServerType.Default,
+                DataSource = server,
+                Database = databasePath,
+                UserID = user,
+                Password = password,
+                Charset = "UTF8",
                 Dialect = 3
             };
 
-            Console.WriteLine("Tworzenie pustej bazy Firebird...");
-            FbConnection.CreateDatabase(csb.ToString(), pageSize: 16384);
-            Console.WriteLine("Baza utworzona: " + dbPath);
-            if (!Directory.Exists(scriptsDirectory))
+            string connectionString = csBuilder.ToString();
+            if (!File.Exists(databasePath))
             {
-                Console.WriteLine("Podany katalog ze skryptami nie istnieje!");
-                return;
+                Console.WriteLine("Tworzenie bazy danych...");
+                FbConnection.CreateDatabase(connectionString);
+                Console.WriteLine($"Baza danych utworzona: {databasePath}");
             }
-
-            var sqlFiles = Directory.GetFiles(scriptsDirectory, "*.sql");
-
-            if (sqlFiles.Length == 0)
+            else
             {
-                Console.WriteLine("Brak plików SQL w katalogu.");
-                return;
+                Console.WriteLine("Baza istnieje. Przechodzę dalej.");
             }
-
-            Console.WriteLine($"Znaleziono {sqlFiles.Length} plików SQL.");
 
             try
             {
-                using var connection = new FbConnection(csb.ToString());
+                using var connection = new FbConnection(connectionString);
                 connection.Open();
+                Console.WriteLine("Połączono z bazą danych.");
+
+                var sqlFiles = Directory.GetFiles(scriptsDirectory, "*.sql");
+                Array.Sort(sqlFiles);
 
                 foreach (var file in sqlFiles)
                 {
-                    Console.WriteLine($"\nUruchamianie skryptu: {Path.GetFileName(file)}");
+                    Console.WriteLine($"Wykonuję: {Path.GetFileName(file)}");
 
                     string script = File.ReadAllText(file);
-
                     using var command = new FbCommand(script, connection);
                     command.ExecuteNonQuery();
 
-                    Console.WriteLine("OK");
+                    Console.WriteLine($"✓ Wykonano: {Path.GetFileName(file)}");
                 }
 
-                Console.WriteLine("\n=== Wszystkie skrypty wykonane poprawnie ===");
+                Console.WriteLine("Wszystkie skrypty wykonane.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"\nBłąd podczas wykonywania skryptów: {ex.Message}");
+                Console.WriteLine("Błąd wykonywania skryptów: " + ex.Message);
             }
-            throw new NotImplementedException();
         }
+
 
         /// <summary>
         /// Generuje skrypty metadanych z istniejącej bazy danych Firebird 5.0.
